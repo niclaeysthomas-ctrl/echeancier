@@ -1,0 +1,293 @@
+/* L'ÉCHÉANCIER — moteur de calcul (pur, sans DOM, testable)
+   Tout est en dates locales "YYYY-MM-DD". Aucune UTC, aucun décalage. */
+
+/* ---------- dates ---------- */
+const d2s = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+const s2d = s => { const [y, m, j] = s.split("-").map(Number); return new Date(y, m - 1, j, 12, 0, 0); };
+const addJ = (s, n) => { const d = s2d(s); d.setDate(d.getDate() + n); return d2s(d); };
+const addM = (s, n) => { const d = s2d(s); const j = d.getDate(); d.setDate(1); d.setMonth(d.getMonth() + n); d.setDate(Math.min(j, dansMois(d.getFullYear(), d.getMonth() + 1))); return d2s(d); };
+const dansMois = (y, m) => new Date(y, m, 0).getDate();          // m = 1-12
+const today = () => d2s(new Date());
+const diffJ = (a, b) => Math.round((s2d(b) - s2d(a)) / 86400000);
+const jsem = s => s2d(s).getDay();                                // 0=dim
+const moisDe = s => s.slice(0, 7);
+const finDeMois = s => { const [y, m] = s.split("-").map(Number); return `${y}-${String(m).padStart(2, "0")}-${String(dansMois(y, m)).padStart(2, "0")}`; };
+const debutDeMois = s => s.slice(0, 7) + "-01";
+
+/* ---------- jours fériés France (calculés, pas de table) ---------- */
+function paques(y) {                                              // Meeus/Jones/Butcher
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mois = Math.floor((h + l - 7 * m + 114) / 31), jour = ((h + l - 7 * m + 114) % 31) + 1;
+  return `${y}-${String(mois).padStart(2, "0")}-${String(jour).padStart(2, "0")}`;
+}
+const _feriesCache = {};
+function feries(y) {
+  if (_feriesCache[y]) return _feriesCache[y];
+  const p = paques(y);
+  const s = new Set([`${y}-01-01`, addJ(p, 1), `${y}-05-01`, `${y}-05-08`, addJ(p, 39), addJ(p, 50),
+    `${y}-07-14`, `${y}-08-15`, `${y}-11-01`, `${y}-11-11`, `${y}-12-25`]);
+  return (_feriesCache[y] = s);
+}
+const ouvre = s => { const j = jsem(s); return j !== 0 && j !== 6 && !feries(+s.slice(0, 4)).has(s); };
+function ajusteOuvre(s, mode) {                                   // "apres" | "avant" | "aucun"
+  if (mode !== "apres" && mode !== "avant") return s;
+  let d = s, n = 0;
+  while (!ouvre(d) && n++ < 12) d = addJ(d, mode === "apres" ? 1 : -1);
+  return d;
+}
+
+/* ---------- catégories ---------- */
+const CATS = {
+  logement:   { e: "🏠", n: "Logement",    c: "#7c9cff" },
+  energie:    { e: "⚡", n: "Énergie",      c: "#f5c451" },
+  telecom:    { e: "📱", n: "Télécom",      c: "#59c2e8" },
+  courses:    { e: "🛒", n: "Courses",      c: "#4ec97e" },
+  transport:  { e: "🚆", n: "Transport",    c: "#b48ef5" },
+  abos:       { e: "📺", n: "Abonnements",  c: "#ef6fa8" },
+  sante:      { e: "🩺", n: "Santé",        c: "#5be0c0" },
+  assurance:  { e: "🛡", n: "Assurances",   c: "#8fa3bf" },
+  ecole:      { e: "🎓", n: "Études",       c: "#e8956a" },
+  sport:      { e: "🥊", n: "Sport",        c: "#e5484d" },
+  sorties:    { e: "🍻", n: "Sorties",      c: "#f2a33c" },
+  resto:      { e: "🍽", n: "Restos",       c: "#f5854a" },
+  shopping:   { e: "👕", n: "Shopping",     c: "#c98ee0" },
+  voyage:     { e: "✈️", n: "Voyages",      c: "#63b3ed" },
+  banque:     { e: "🏦", n: "Banque/frais", c: "#8d95a5" },
+  credit:     { e: "🧾", n: "Crédit",       c: "#d1657a" },
+  epargne:    { e: "🐖", n: "Épargne",      c: "#3ddc97" },
+  divers:     { e: "✳️", n: "Divers",       c: "#9aa3b2" },
+  salaire:    { e: "💰", n: "Salaire",      c: "#3ddc97" },
+  aides:      { e: "🤝", n: "Aides/APL",    c: "#5ec4a0" },
+  famille:    { e: "👨‍👩‍👦", n: "Famille",  c: "#7fd6a8" }
+};
+const cat = k => CATS[k] || CATS.divers;
+
+/* ---------- fréquences ---------- */
+const FREQ = {
+  mensuel:     { n: "Chaque mois",      pas: 1,  unite: "m", parAn: 12 },
+  bimestriel:  { n: "Tous les 2 mois",  pas: 2,  unite: "m", parAn: 6 },
+  trimestriel: { n: "Chaque trimestre", pas: 3,  unite: "m", parAn: 4 },
+  semestriel:  { n: "Chaque semestre",  pas: 6,  unite: "m", parAn: 2 },
+  annuel:      { n: "Chaque année",     pas: 12, unite: "m", parAn: 1 },
+  hebdo:       { n: "Chaque semaine",   pas: 7,  unite: "j", parAn: 52.1786 },
+  quinzaine:   { n: "Tous les 15 jours",pas: 14, unite: "j", parAn: 26.0893 },
+  ponctuel:    { n: "Une seule fois",   pas: 0,  unite: "-", parAn: 0 }
+};
+
+/* Montant annualisé d'un flux (signé). */
+function parAn(f) {
+  if (f.freq === "ponctuel") return 0;
+  return f.montant * (FREQ[f.freq] ? FREQ[f.freq].parAn : 0);
+}
+const parMois = f => parAn(f) / 12;
+
+/* ---------- occurrences ----------
+   Renvoie [{date, montant, f}] pour un flux entre a et b inclus. */
+function occurrences(f, a, b) {
+  if (!f.actif) return [];
+  const out = [];
+  const debut = f.debut || "1900-01-01";
+  const fin = f.fin || "2999-12-31";
+  const borneA = a > debut ? a : debut;
+  const push = brut => {
+    if (brut < debut || brut > fin) return;
+    const d = ajusteOuvre(brut, f.wk || "aucun");
+    if (d < a || d > b) return;
+    out.push({ date: d, brut, montant: f.montant, f });
+  };
+
+  if (f.freq === "ponctuel") { push(f.date); return out; }
+
+  if (FREQ[f.freq].unite === "j") {                               // hebdo / quinzaine
+    const pas = FREQ[f.freq].pas;
+    let d = f.debut || a;
+    if (d < borneA) { const n = Math.floor(diffJ(d, borneA) / pas); d = addJ(d, Math.max(0, n - 1) * pas); }
+    let garde = 0;
+    while (d <= b && garde++ < 2000) { push(d); d = addJ(d, pas); }
+    return out;
+  }
+
+  const pas = FREQ[f.freq].pas;                                   // mensuel & multiples
+  const ancreM = f.debut || `${a.slice(0, 4)}-01-01`;
+  const jour = f.jour || +(f.debut || a).slice(8, 10) || 1;
+  let curseur = debutDeMois(ancreM);
+  const finB = debutDeMois(b);
+  if (curseur < debutDeMois(borneA)) {
+    const ecart = (+borneA.slice(0, 4) - +curseur.slice(0, 4)) * 12 + (+borneA.slice(5, 7) - +curseur.slice(5, 7));
+    // un pas de recul : une échéance de fin de mois peut être décalée sur le mois suivant
+    curseur = addM(curseur, Math.max(0, Math.floor(ecart / pas) - 1) * pas);
+  }
+  let garde = 0;
+  while (curseur <= addM(finB, pas) && garde++ < 2000) {
+    const [y, m] = curseur.split("-").map(Number);
+    if (f.freq === "annuel" && f.mois && m !== f.mois) { curseur = addM(curseur, pas); continue; }
+    const jj = Math.min(jour, dansMois(y, m));
+    push(`${y}-${String(m).padStart(2, "0")}-${String(jj).padStart(2, "0")}`);
+    curseur = addM(curseur, pas);
+  }
+  return out.sort((x, y) => x.date < y.date ? -1 : 1);
+}
+
+/* Toutes les occurrences prévues (hors enveloppes lissées) entre a et b. */
+function agenda(S, a, b) {
+  const out = [];
+  for (const f of S.flux) { if (f.enveloppe) continue; out.push(...occurrences(f, a, b)); }
+  return out.sort((x, y) => x.date < y.date ? -1 : (x.date > y.date ? 1 : 0));
+}
+
+/* ---------- rapprochement prévu <-> réel ----------
+   Si une dépense notée ressemble à une échéance prévue (même sens, montant proche, à quelques
+   jours près), c'est la même opération : on marque la prévision comme "pointée" pour ne pas
+   la compter deux fois. */
+function pointage(S, occs, depuis) {
+  const pris = new Set();
+  const cand = S.reels.filter(r => r.date > depuis);
+  for (const o of occs) {
+    o.pointe = null;
+    if (o.date <= depuis) continue;
+    const c = cand.find(r => !pris.has(r.id)
+      && (r.montant < 0) === (o.montant < 0)
+      && Math.abs(Math.abs(r.montant) - Math.abs(o.montant)) <= Math.max(1.5, Math.abs(o.montant) * 0.04)
+      && Math.abs(diffJ(o.date, r.date)) <= 4);
+    if (c) { pris.add(c.id); o.pointe = c.id; }
+  }
+  return occs;
+}
+
+/* ---------- enveloppes (dépenses variables lissées) ----------
+   Une enveloppe = budget mensuel. Les dépenses réelles de sa catégorie la consomment.
+   Ce qui reste est étalé sur les jours restants du mois. */
+function resteEnveloppe(S, f, mois, depuis) {
+  const budget = Math.abs(f.montant);
+  const depense = S.reels
+    .filter(r => moisDe(r.date) === mois && r.cat === f.cat && r.montant < 0)
+    .reduce((s, r) => s + Math.abs(r.montant), 0);
+  const dernier = finDeMois(mois + "-01");
+  const debutFen = depuis > mois + "-01" ? depuis : mois + "-01";
+  if (debutFen > dernier) return { reste: 0, jours: 0, debut: debutFen, fin: dernier, budget, depense };
+  const jours = diffJ(debutFen, dernier) + 1;
+  return { reste: Math.max(0, budget - depense), jours, debut: debutFen, fin: dernier, budget, depense };
+}
+
+/* ---------- projection jour par jour ----------
+   Départ : le solde ancré à sa date. Puis, strictement APRÈS cette date :
+   + occurrences prévues  + dépenses réelles hors catégories-enveloppes
+   + enveloppes lissées (leur reste du mois étalé sur les jours restants). */
+function projection(S, jours = 120) {
+  const a0 = S.ancre.date, dep = +S.ancre.solde || 0;
+  const t = today();
+  const debut = a0 < t ? a0 : t;                                   // on montre aussi le passé récent
+  const fin = addJ(t, jours);
+  const catsEnv = new Set(S.flux.filter(f => f.enveloppe && f.actif).map(f => f.cat));
+
+  const evts = {};
+  const push = (d, o) => { (evts[d] = evts[d] || []).push(o); };
+
+  for (const o of pointage(S, agenda(S, addJ(a0, 1), fin), a0)) {
+    if (o.pointe) continue;                                        // déjà passé sur le compte
+    push(o.date, { nom: o.f.nom, cat: o.f.cat, montant: o.montant, type: "prevu", id: o.f.id, wk: o.brut !== o.date });
+  }
+
+  for (const r of S.reels) {
+    if (r.date <= a0 || r.date > fin) continue;
+    if (r.montant < 0 && catsEnv.has(r.cat)) continue;             // consommé par l'enveloppe
+    push(r.date, { nom: r.nom || cat(r.cat).n, cat: r.cat, montant: r.montant, type: "reel", id: r.id });
+  }
+
+  // enveloppes : part quotidienne, mois par mois
+  const parJourEnv = {};
+  for (const f of S.flux.filter(x => x.enveloppe && x.actif)) {
+    let m = moisDe(addJ(a0, 1) > t ? addJ(a0, 1) : t);
+    const mFin = moisDe(fin);
+    let garde = 0;
+    while (m <= mFin && garde++ < 60) {
+      const depuis = (addJ(a0, 1) > m + "-01") ? addJ(a0, 1) : m + "-01";
+      const r = resteEnveloppe(S, f, m, depuis);
+      if (r.jours > 0 && r.reste > 0) {
+        const q = r.reste / r.jours;
+        for (let i = 0; i < r.jours; i++) {
+          const d = addJ(r.debut, i);
+          if (d <= a0 || d > fin) continue;
+          parJourEnv[d] = (parJourEnv[d] || 0) - q;
+        }
+      }
+      m = moisDe(addM(m + "-01", 1));
+    }
+  }
+
+  const lignes = [];
+  let solde = dep;
+  for (let d = debut; d <= fin; d = addJ(d, 1)) {
+    const ev = (evts[d] || []).slice().sort((x, y) => x.montant - y.montant);
+    const env = parJourEnv[d] || 0;
+    const delta = ev.reduce((s, e) => s + e.montant, 0) + env;
+    if (d > a0) solde += delta;
+    lignes.push({
+      date: d, solde: Math.round(solde * 100) / 100, evts: ev, env,
+      entrees: ev.filter(e => e.montant > 0).reduce((s, e) => s + e.montant, 0),
+      sorties: ev.filter(e => e.montant < 0).reduce((s, e) => s + e.montant, 0) + env
+    });
+  }
+  return lignes;
+}
+
+/* ---------- lectures utiles ---------- */
+function creux(lignes) {                                          // point le plus bas à venir
+  const t = today();
+  const fut = lignes.filter(l => l.date >= t);
+  if (!fut.length) return null;
+  return fut.reduce((m, l) => l.solde < m.solde ? l : m, fut[0]);
+}
+function passageSous(lignes, seuil = 0) {
+  const t = today();
+  return lignes.find(l => l.date >= t && l.solde < seuil) || null;
+}
+function prochaineEntree(S, apres, horizon = 70) {
+  const o = agenda(S, addJ(apres, 1), addJ(apres, horizon)).filter(x => x.montant > 0);
+  return o.length ? o[0] : null;
+}
+/* Reste à vivre : ce qui est libre d'ici la prochaine rentrée d'argent. */
+function resteAVivre(S, lignes) {
+  const t = today();
+  const auj = lignes.find(l => l.date === t);
+  if (!auj) return null;
+  const pe = prochaineEntree(S, t);
+  const cible = pe ? pe.date : finDeMois(t);
+  const jours = Math.max(1, diffJ(t, cible));
+  const obl = agenda(S, addJ(t, 1), cible).reduce((s, o) => s + Math.min(0, o.montant), 0);
+  const env = lignes.filter(l => l.date > t && l.date <= cible).reduce((s, l) => s + l.env, 0);
+  const libre = auj.solde + obl + env - (+S.matelas || 0);
+  return { libre, jours, parJour: libre / jours, cible, obligations: -obl, enveloppes: -env, entree: pe };
+}
+/* Bilan : ce que chaque poste coûte par mois / par an. */
+function bilan(S) {
+  const postes = {};
+  let inM = 0, outM = 0;
+  for (const f of S.flux) {
+    if (!f.actif || f.freq === "ponctuel") continue;
+    const m = f.enveloppe ? f.montant : parMois(f);
+    if (m > 0) inM += m; else outM += m;
+    const k = f.cat;
+    postes[k] = postes[k] || { cat: k, mois: 0, an: 0, n: 0, flux: [] };
+    postes[k].mois += m; postes[k].an += m * 12; postes[k].n++; postes[k].flux.push({ f, mois: m });
+  }
+  const liste = Object.values(postes).sort((a, b) => a.mois - b.mois);
+  return { postes: liste, entreesMois: inM, sortiesMois: outM, netMois: inM + outM, netAn: (inM + outM) * 12 };
+}
+/* Prévu vs réel d'un mois, par catégorie. */
+function prevuReel(S, mois) {
+  const a = mois + "-01", b = finDeMois(a);
+  const m = {};
+  const add = (k, champ, v) => { m[k] = m[k] || { cat: k, prevu: 0, reel: 0 }; m[k][champ] += v; };
+  for (const f of S.flux.filter(x => x.actif)) {
+    if (f.enveloppe) add(f.cat, "prevu", f.montant);
+    else for (const o of occurrences(f, a, b)) add(f.cat, "prevu", o.montant);
+  }
+  void 0;
+  for (const r of S.reels.filter(x => moisDe(x.date) === mois)) add(r.cat, "reel", r.montant);
+  return Object.values(m).sort((x, y) => (x.prevu + x.reel) - (y.prevu + y.reel));
+}
