@@ -55,7 +55,7 @@ function ecTape(t) {
 function ecValide(k) {
   const e = document.getElementById("ec-nom"); if (e) EC.nom = e.value;
   const m = parseFloat((EC.v || "0").replace(",", "."));
-  if (!m) return toast("Tape un montant d&#39;abord");
+  if (!m) return toast("Tape un montant d\u2019abord");
   S.reels.push({ id: uid(), date: EC.date, montant: Math.abs(m) * EC.sens, cat: k, nom: EC.nom.trim() });
   save(); closeSheet(); recalc(); render();
   toast(CATS[k].e + " " + fmt(Math.abs(m) * EC.sens, true) + " noté");
@@ -109,6 +109,7 @@ function departSave() {
     const ji = document.getElementById(id);
     const jour = ji ? Math.max(1, Math.min(31, +ji.value || 1)) : 1;
     const sens = +d.sens, env = d.type === "env";
+    if (env && S.flux.some(x => x.enveloppe && x.actif && x.cat === d.cat)) return;
     const date = `${moisDe(today())}-${String(jour).padStart(2, "0")}`;
     S.flux.push({
       id: uid(), nom: d.nom, montant: v * sens, cat: d.cat, actif: true,
@@ -330,4 +331,56 @@ function sheetAide() {
     <div style="font-size:14px;font-weight:700;margin-bottom:5px">${t}</div>
     <div style="font-size:12.5px;line-height:1.6;color:var(--muted)">${d}</div></div>`).join("")}
   <button class="btn sm" style="margin-top:8px;border:none;color:var(--muted)" data-a="close">Fermer</button>`);
+}
+
+/* ============ 7. ÉPARGNE ============ */
+function sheetLivrets() {
+  const l = (S.livrets || []).slice();
+  while (l.length < 4) l.push({ nom: "", montant: "", taux: "" });
+  openSheet(`<h3>Mon épargne</h3>
+  <div class="sub">Tes livrets, à côté du compte courant. L&#39;app s&#39;en sert pour te dire combien de temps
+    tu tiens si tu dépenses plus que tu ne gagnes — et ce que ça te coûte de piocher dedans.</div>
+  ${l.map((x, i) => `<div class="f2" style="grid-template-columns:1.4fr 1fr;margin-bottom:9px">
+    <div class="f" style="margin:0"><label>${i === 0 ? "Nom du livret" : "&nbsp;"}</label>
+      <input id="lv-n-${i}" value="${esc(x.nom || "")}" placeholder="Livret A" autocomplete="off"></div>
+    <div class="f" style="margin:0"><label>${i === 0 ? "Montant (€)" : "&nbsp;"}</label>
+      <input id="lv-m-${i}" type="number" inputmode="decimal" step="0.01" value="${x.montant || ""}" placeholder="0"></div>
+  </div>`).join("")}
+  <button class="btn pri" style="margin-top:6px" data-a="lv-save">Enregistrer</button>
+  <button class="btn sm" style="margin-top:8px;border:none;color:var(--muted)" data-a="close">Annuler</button>`);
+}
+function livretsSave() {
+  const out = [];
+  for (let i = 0; i < 4; i++) {
+    const n = (document.getElementById("lv-n-" + i) || {}).value || "";
+    const m = parseFloat(String((document.getElementById("lv-m-" + i) || {}).value || "").replace(",", ".")) || 0;
+    if (m) out.push({ id: uid(), nom: n.trim() || "Livret", montant: m, taux: 0 });
+  }
+  S.livrets = out;
+  save(); closeSheet(); recalc(); render();
+  toast(out.length ? "Épargne enregistrée ✓" : "Épargne effacée");
+}
+function htmlEpargne() {
+  const e = epargne(S);
+  if (!e.total) return `<div class="sec"><button class="btn" data-a="livrets">🐖 Ajouter mes livrets</button></div>`;
+  const t = tenue(S);
+  const l = ligneAuj();
+  const patrimoine = e.total + (l ? l.solde : 0);
+  return `<div class="sec"><div class="sec-h"><h2>Mon épargne</h2>
+    <button class="tag" data-a="livrets">modifier</button></div>
+    <div class="card kpi"><div class="k">Ce que tu as, en tout</div>
+      <div class="v pos num">${fmt0(patrimoine)}</div>
+      <div class="s">${fmt0(e.total)} sur tes livrets + ${fmt0(l ? l.solde : 0)} sur ton compte</div></div>
+    ${e.liste.map(x => `<div class="row"><div class="em">🐖</div>
+      <div class="in"><div class="t">${esc(x.nom)}</div>
+        <div class="s">${Math.round(x.montant / e.total * 100)} % de ton épargne</div></div>
+      <div class="m num">${fmt0(x.montant)}</div></div>`).join("")}
+    ${t.mois !== null ? `<div class="alerte ${t.mois < 12 ? "al-bad" : "al-warn"}" style="margin-top:9px"><div>⏳</div><div>
+      <b>Tu vis au-dessus de ce qui rentre</b>
+      Il te manque ${fmt0(t.deficit)} par mois, soit ${fmt0(Math.abs(t.parAn))} sur un an.
+      À ce rythme, ton épargne y passe en <b>${Math.floor(t.mois)} mois</b> — vers ${nomMois(moisDe(t.date))}.
+      Ce n&#39;est pas un drame en soi : c&#39;est un choix. Mais il vaut mieux le faire les yeux ouverts.</div></div>`
+    : `<div class="alerte al-good" style="margin-top:9px"><div>✅</div><div><b>Ton train de vie tient tout seul</b>
+      Tu n&#39;as pas besoin de piocher dans tes livrets — ton épargne travaille pour plus tard.</div></div>`}
+  </div>`;
 }

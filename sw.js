@@ -1,5 +1,5 @@
 // L'ÉCHÉANCIER — service worker : network-first, repli cache (100 % hors-ligne)
-const CACHE = "echeancier-v2-outils";
+const CACHE = "echeancier-v3-epargne";
 const ASSETS = ["./", "./index.html", "./moteur.js", "./outils.js", "./app.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {

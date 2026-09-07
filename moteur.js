@@ -406,3 +406,22 @@ function objectifEtat(S, lignes) {
     pct: cible > seuil ? Math.max(0, Math.min(100, ((prevu - seuil) / (cible - seuil)) * 100)) : 0
   };
 }
+
+/* ---------- épargne (livrets, hors compte courant) ---------- */
+function epargne(S) {
+  const l = (S.livrets || []).filter(x => x && +x.montant);
+  const total = l.reduce((s, x) => s + (+x.montant || 0), 0);
+  const interets = l.reduce((s, x) => s + (+x.montant || 0) * (+x.taux || 0) / 100, 0);
+  return { liste: l, total, interets };
+}
+/* Si le train de vie est déficitaire, combien de temps l'épargne encaisse. */
+function tenue(S) {
+  const b = bilan(S), e = epargne(S);
+  if (b.netMois >= 0) return { deficit: 0, mois: null, total: e.total };
+  const mois = e.total / Math.abs(b.netMois);
+  return {
+    deficit: -b.netMois, mois, total: e.total,
+    date: addM(today(), Math.floor(mois)),
+    parAn: b.netMois * 12
+  };
+}

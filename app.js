@@ -9,6 +9,7 @@ const vide = () => ({
   reels: [],
   reglages: { horizon: 90, wkDefaut: "apres" },
   objectif: null,
+  livrets: [],
   vu: null
 });
 let S = vide();
@@ -435,9 +436,9 @@ function vueBilan() {
       <div class="s">soit <b>${fmt0(b.sortiesMois * 12)}</b> par an. Il faut que tu gagnes au moins
         ${fmt0(Math.abs(b.sortiesMois))} par mois pour être à l&#39;équilibre.</div></div>
     <div class="cards" style="margin-top:9px">
-      <div class="card kpi"><div class="k">Taux d&#39;épargne</div>
-        <div class="v num ${cls(b.netMois)}">${b.entreesMois > 0 ? Math.round(b.netMois / b.entreesMois * 100) + " %" : "—"}</div>
-        <div class="s">de ce qui rentre te reste</div></div>
+      <div class="card kpi"><div class="k">${b.netMois >= 0 ? "Taux d&#39;épargne" : "Tu dépenses en trop"}</div>
+        <div class="v num ${cls(b.netMois)}">${b.entreesMois > 0 ? Math.abs(Math.round(b.netMois / b.entreesMois * 100)) + " %" : "—"}</div>
+        <div class="s">${b.netMois >= 0 ? "de ce qui rentre te reste" : "de plus que ce qui rentre, chaque mois"}</div></div>
       <div class="card kpi"><div class="k">Par jour</div>
         <div class="v neg num">${fmt0(b.sortiesMois * 12 / 365)}</div>
         <div class="s">ce que tu dépenses en moyenne, chaque jour</div></div>
@@ -450,6 +451,7 @@ function vueBilan() {
         : "si tout s&#39;arrêtait aujourd&#39;hui — plus aucune rentrée d&#39;argent — tu tiendrais " + nJours(a.jours)
           + " avant de toucher ton matelas, à " + fmt0(a.parJour) + " par jour."}</div></div>` : ""; })()}
   </div>
+  ${htmlEpargne()}
   ${htmlProvisions()}
   ${htmlHisto()}
   <div class="sec"><h2>Où part l&#39;argent</h2>
@@ -564,7 +566,11 @@ function saveFlux() {
     date: ED.date1, debut: ED.date1, fin: ED.fin || null,
     jour: +(ED.date1 || today()).slice(8, 10), mois: +(ED.date1 || today()).slice(5, 7)
   };
-  if (f.enveloppe) { f.debut = null; f.fin = null; }
+  if (f.enveloppe) {
+    f.debut = null; f.fin = null;
+    const jum = S.flux.find(x => x.id !== f.id && x.enveloppe && x.actif && x.cat === f.cat);
+    if (jum) return toast("« " + jum.nom + " » est déjà l\u2019enveloppe de cette catégorie");
+  }
   const i = S.flux.findIndex(x => x.id === f.id);
   if (i >= 0) S.flux[i] = f; else S.flux.push(f);
   save(); closeSheet(); recalc(); render();
@@ -863,6 +869,8 @@ document.addEventListener("click", ev => {
       save(); closeSheet(); recalc(); render(); toast("Ajouté à ton échéancier ✓");
     },
     objectif: sheetObjectif,
+    livrets: sheetLivrets,
+    "lv-save": livretsSave,
     aide: sheetAide,
     "o-save": () => {
       const g = k => (document.getElementById(k) || {}).value;
