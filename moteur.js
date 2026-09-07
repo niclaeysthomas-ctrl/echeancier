@@ -291,3 +291,118 @@ function prevuReel(S, mois) {
   for (const r of S.reels.filter(x => moisDe(x.date) === mois)) add(r.cat, "reel", r.montant);
   return Object.values(m).sort((x, y) => (x.prevu + x.reel) - (y.prevu + y.reel));
 }
+
+/* ============================================================
+   AJOUTS — provisions, simulation, historique, objectif
+   ============================================================ */
+
+/* Les grosses échéances qui ne tombent pas tous les mois (assurance au trimestre,
+   impôts à l'année…). Ce qu'il faudrait mettre de côté chaque mois pour ne pas
+   les prendre dans la figure. */
+function provisions(S) {
+  const l = S.flux
+    .filter(f => f.actif && !f.enveloppe && f.montant < 0 && f.freq !== "ponctuel" && FREQ[f.freq].parAn < 12)
+    .map(f => ({ f, mois: -parMois(f), an: -parAn(f), prochaine: (occurrences(f, today(), addJ(today(), 800))[0] || {}).date }))
+    .sort((a, b) => b.mois - a.mois);
+  return { liste: l, mois: l.reduce((s, x) => s + x.mois, 0), an: l.reduce((s, x) => s + x.an, 0) };
+}
+
+/* Combien de jours tu tiens si tout s'arrête : solde ÷ dépenses moyennes par jour. */
+function autonomie(S, lignes) {
+  const l = lignes.find(x => x.date === today());
+  const b = bilan(S);
+  const parJour = Math.abs(b.sortiesMois) * 12 / 365;
+  if (!l || parJour <= 0) return null;
+  return { jours: Math.max(0, Math.floor((l.solde - (+S.matelas || 0)) / parJour)), parJour, solde: l.solde };
+}
+
+/* ---------- simulation « et si ? » ----------
+   Une dépense ponctuelle décale tout le solde à partir de sa date : solde'(j) = solde(j) − M
+   pour j ≥ d. On précalcule donc le minimum de fin de série (suffixe) : une seule projection
+   suffit pour répondre à « ça passe ? » et « à partir de quand ça passerait ? ». */
+function simule(S, montant, date, lignes) {
+  const M = Math.abs(montant), seuil = +S.matelas || 0, t = today();
+  const L = (lignes || projection(S, 400)).filter(l => l.date >= t);
+  const sufMin = new Array(L.length);
+  let m = Infinity;
+  for (let i = L.length - 1; i >= 0; i--) { m = Math.min(m, L[i].solde); sufMin[i] = m; }
+  const idx = L.findIndex(l => l.date >= date);
+  if (idx < 0) return null;
+  const avantMin = sufMin[0];
+  const apresMin = sufMin[idx] - M;
+  const iBas = L.slice(idx).reduce((best, l, k) => l.solde < L[idx + best].solde ? k : best, 0) + idx;
+  let possible = null;
+  for (let i = 0; i < L.length; i++) if (sufMin[i] - M >= seuil) { possible = L[i].date; break; }
+  const soldeApres = L[L.length - 1].solde - M;
+  return {
+    montant: M, date, seuil,
+    avantMin, apresMin,
+    dateBas: L[iBas] ? L[iBas].date : null,
+    ok: apresMin >= seuil,
+    juste: apresMin >= seuil && apresMin < seuil + M * .5,
+    manque: Math.max(0, seuil - apresMin),
+    possible, soldeApres,
+    courbe: L.map((l, i) => ({ date: l.date, solde: i >= idx ? l.solde - M : l.solde }))
+  };
+}
+
+/* ---------- historique réel, mois par mois ---------- */
+function histoMois(S, n = 6) {
+  const out = [];
+  let m = moisDe(today());
+  for (let i = 0; i < n; i++) {
+    const rs = S.reels.filter(r => moisDe(r.date) === m);
+    const inn = rs.filter(r => r.montant > 0).reduce((s, r) => s + r.montant, 0);
+    const out_ = rs.filter(r => r.montant < 0).reduce((s, r) => s + r.montant, 0);
+    const parCat = {};
+    for (const r of rs) if (r.montant < 0) parCat[r.cat] = (parCat[r.cat] || 0) + r.montant;
+    out.push({
+      mois: m, n: rs.length, entrees: inn, sorties: out_, net: inn + out_,
+      cats: Object.entries(parCat).map(([cat, v]) => ({ cat, v })).sort((a, b) => a.v - b.v)
+    });
+    m = moisDe(addM(m + "-01", -1));
+  }
+  return out;
+}
+
+/* Moyenne mensuelle réelle par catégorie sur les mois COMPLETS précédents,
+   comparée au mois en cours (projeté à l'échelle du mois entier). */
+function tendances(S, n = 3) {
+  const cour = moisDe(today());
+  const hist = histoMois(S, n + 1).filter(h => h.mois !== cour && h.n > 0);
+  const moy = {};
+  for (const h of hist) for (const c of h.cats) moy[c.cat] = (moy[c.cat] || 0) + c.v / hist.length;
+  const rsC = S.reels.filter(r => moisDe(r.date) === cour && r.montant < 0);
+  const enCours = {};
+  for (const r of rsC) enCours[r.cat] = (enCours[r.cat] || 0) + r.montant;
+  const jr = +today().slice(8, 10), nj = dansMois(+cour.slice(0, 4), +cour.slice(5, 7));
+  const out = [];
+  for (const cat of new Set([...Object.keys(moy), ...Object.keys(enCours)])) {
+    const ref = moy[cat] || 0, act = enCours[cat] || 0;
+    const proj = act / Math.max(1, jr) * nj;
+    out.push({ cat, moyenne: ref, actuel: act, projete: proj, ecart: ref ? (proj - ref) / Math.abs(ref) : null });
+  }
+  return { mois: hist.length, liste: out.sort((a, b) => a.projete - b.projete) };
+}
+
+/* ---------- objectif d'épargne ---------- */
+function objectifEtat(S, lignes) {
+  const o = S.objectif;
+  if (!o || !o.montant || !o.date) return null;
+  const t = today(), seuil = +S.matelas || 0;
+  const L = lignes || projection(S, Math.max(400, diffJ(t, o.date) + 10));
+  const l = L.find(x => x.date === o.date) || L[L.length - 1];
+  const auj = L.find(x => x.date === t);
+  const prevu = l ? l.solde : 0;
+  const cible = +o.montant + seuil;
+  const jours = Math.max(0, diffJ(t, o.date));
+  const mois = Math.max(1, jours / 30.44);
+  const creuxAvant = L.filter(x => x.date >= t && x.date <= o.date).reduce((m, x) => x.solde < m ? x.solde : m, Infinity);
+  return {
+    nom: o.nom || "Mon objectif", montant: +o.montant, date: o.date, jours,
+    prevu, cible, manque: Math.max(0, cible - prevu), atteint: prevu >= cible,
+    parMois: Math.max(0, cible - prevu) / mois, parJour: Math.max(0, cible - prevu) / Math.max(1, jours),
+    aujourdhui: auj ? auj.solde : 0, creuxAvant: creuxAvant === Infinity ? null : creuxAvant,
+    pct: cible > seuil ? Math.max(0, Math.min(100, ((prevu - seuil) / (cible - seuil)) * 100)) : 0
+  };
+}

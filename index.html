@@ -171,6 +171,34 @@ table.pv{width:100%;border-collapse:collapse;font-size:13px}
 table.pv td{padding:8px 4px;border-bottom:1px solid var(--line)}
 table.pv td:last-child,table.pv td:nth-child(3){text-align:right;font-variant-numeric:tabular-nums}
 table.pv tr:last-child td{border-bottom:none}
+
+/* saisie éclair */
+.ec-top{text-align:center;padding:2px 0 6px}
+.ec-sens{display:flex;gap:6px;justify-content:center;margin-bottom:10px}
+.ec-sens button{border:1px solid var(--line2);border-radius:9px;padding:7px 16px;font-size:12.5px;font-weight:700;color:var(--muted)}
+.ec-sens button.on.out{color:var(--bad);border-color:var(--bad);background:#ff5f5f12}
+.ec-sens button.on.in{color:var(--good);border-color:var(--good);background:#3ddc9712}
+.ec-val{font-size:46px;font-weight:300;letter-spacing:-.03em;line-height:1.1}
+.ec-val .cur{font-size:21px;color:var(--muted)}
+.ec-nom{width:100%;background:none;border:none;border-bottom:1px solid var(--line);color:var(--txt);
+  text-align:center;padding:8px 0;outline:none;font-size:14px;margin-top:6px}
+.ec-nom::placeholder{color:var(--dim)}
+.ec-dates{display:flex;gap:6px;margin:11px 0}
+.ec-dates button{flex:1;border:1px solid var(--line);border-radius:9px;padding:8px 2px;font-size:11.5px;font-weight:700;color:var(--muted)}
+.ec-dates button.on{background:var(--card2);color:var(--txt);border-color:var(--line2)}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:13px}
+.tk{background:var(--card2);border:1px solid var(--line);border-radius:11px;padding:13px 0;font-size:20px;font-weight:600}
+.tk:active{background:var(--line)}
+.ec-lab{font-size:10.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);
+  text-align:center;margin-bottom:9px}
+/* mise en route */
+.dl{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.dl-n{flex:1;font-size:13.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+input.dl-m{width:86px;background:var(--bg);border:1px solid var(--line2);border-radius:9px;padding:9px;
+  color:var(--txt);text-align:right;outline:none;font-size:15px}
+input.dl-j{width:50px;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:9px 4px;
+  color:var(--muted);text-align:center;outline:none;font-size:13px}
+span.dl-j{width:50px;text-align:center;font-size:10.5px}
 </style>
 </head>
 <body>
@@ -209,6 +237,7 @@ table.pv tr:last-child td{border-bottom:none}
 <div class="toast" id="toast"></div>
 
 <script src="moteur.js"></script>
+<script src="outils.js"></script>
 <script src="app.js"></script>
 <script>if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(()=>{});}</script>
 </body>

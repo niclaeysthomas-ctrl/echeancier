@@ -8,6 +8,7 @@ const vide = () => ({
   flux: [],
   reels: [],
   reglages: { horizon: 90, wkDefaut: "apres" },
+  objectif: null,
   vu: null
 });
 let S = vide();
@@ -50,8 +51,10 @@ const MOISN = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet",
 const ABR = ["janv.", "févr.", "mars", "avril", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
 const maj1 = s => s.charAt(0).toUpperCase() + s.slice(1);
 const nomMois = m => maj1(MOISN[+m.slice(5, 7) - 1]) + " " + m.slice(0, 4);
-const jourLong = s => JOURS[jsem(s)] + " " + (+s.slice(8, 10)) + " " + MOISN[+s.slice(5, 7) - 1];
-const jourCourt = s => JOURS[jsem(s)].slice(0, 3) + ". " + (+s.slice(8, 10)) + " " + ABR[+s.slice(5, 7) - 1];
+const jourLong = s => JOURS[jsem(s)] + " " + (+s.slice(8, 10)) + " " + MOISN[+s.slice(5, 7) - 1]
+  + (s.slice(0, 4) !== today().slice(0, 4) ? " " + s.slice(0, 4) : "");
+const jourCourt = s => JOURS[jsem(s)].slice(0, 3) + ". " + (+s.slice(8, 10)) + " " + ABR[+s.slice(5, 7) - 1]
+  + (s.slice(0, 4) !== today().slice(0, 4) ? " " + s.slice(0, 4) : "");
 const nJours = n => n + " jour" + (Math.abs(n) > 1 ? "s" : "");
 const cls = n => n < -0.004 ? "neg" : (n > 0.004 ? "pos" : "mut");
 
@@ -161,6 +164,7 @@ function vueMois() {
 
   return `
   ${blocAlerte()}
+  ${htmlSemaine()}
   <div class="sec">
     <div class="cal-nav">
       <button data-a="mois-" >‹</button>
@@ -212,7 +216,7 @@ function blocAlerte() {
       ${bas && bas.date !== sous.date ? " Le pire est le " + jourCourt(bas.date) + " : " + fmt(bas.solde) + "." : ""}</div></div>`;
   } else if (bas) {
     h += `<div class="alerte al-good" style="margin-bottom:8px"><div>✅</div><div>
-      <b>Rien dans le rouge sur 90 jours</b> Ton point le plus bas : ${fmt(bas.solde)} le ${jourCourt(bas.date)}.</div></div>`;
+      <b>Rien dans le rouge sur 90 jours</b> Ton point le plus bas : ${fmt(bas.solde)} le ${jourCourt(bas.date)}</div></div>`;
   }
   if (rav) {
     h += `<div class="cards">
@@ -268,6 +272,8 @@ function vueCap() {
       <div class="s">soit ${fmt0(rav.parJour)} par jour pendant ${nJours(rav.jours)}. Calcul : solde ${fmt0(ligneAuj() ? ligneAuj().solde : 0)}
       − ${fmt0(rav.obligations)} de prélèvements − ${fmt0(rav.enveloppes)} d&#39;enveloppes${+S.matelas ? " − " + fmt0(+S.matelas) + " de matelas" : ""}.</div></div>` : ""}
   </div>
+  <div class="sec"><button class="btn" data-a="simu">🔮 Et si… ? Tester une dépense avant de la faire</button></div>
+  ${htmlObjectif()}
   <div class="sec"><h2>Les prochaines échéances</h2>
     ${lignes.filter(l => l.evts.length).slice(0, 40).map(l => `
       <div class="day-h"><div class="d">${maj1(jourCourt(l.date))}${l.date === t ? " · aujourd&#39;hui" : " · dans " + nJours(diffJ(t, l.date))}</div>
@@ -356,6 +362,7 @@ function vueFlux() {
   ${bloc("Échéances ponctuelles", g.ponct)}
   ${bloc("En pause", g.off)}
   ${!S.flux.length ? `<div class="empty">Aucun flux enregistré.<br><br>Appuie sur <b>+</b> pour ajouter un prélèvement,<br>ou pars des modèles ci-dessous.</div>` : ""}
+  ${S.flux.length < 5 ? '<div class="sec"><button class="btn pri" data-a="depart">🚀 Mise en route — tout saisir d&#39;un coup</button></div>' : ""}
   <div class="sec"><div class="btns"><button class="btn" data-a="modeles">⚡ Modèles</button><button class="btn" data-a="detect">🔎 Détecter mes prélèvements</button></div></div>`;
 }
 
@@ -386,7 +393,7 @@ function vueReel() {
   return `
   <div class="sec" style="margin-top:14px">
     <div class="cal-nav"><button data-a="mois-">‹</button><div class="m">${nomMois(mois)}</div><button data-a="mois+">›</button></div>
-    <div class="btns"><button class="btn pri" data-a="new-reel">＋ Noter une dépense</button>
+    <div class="btns"><button class="btn pri" data-a="eclair">⚡ Noter en 2 secondes</button>
       <button class="btn" data-a="import-releve" style="flex:0 0 44%">📥 Coller un relevé</button></div>
   </div>
   ${envs.length ? `<div class="sec"><h2>Mes enveloppes ce mois-ci</h2>${jauges}</div>` : ""}
@@ -435,7 +442,16 @@ function vueBilan() {
         <div class="v neg num">${fmt0(b.sortiesMois * 12 / 365)}</div>
         <div class="s">ce que tu dépenses en moyenne, chaque jour</div></div>
     </div>
+    ${(() => { const a = autonomie(S, PROJ); return a ? `<div class="card kpi" style="margin-top:9px">
+      <div class="k">Autonomie</div><div class="v num ${a.jours < 15 ? "neg" : (a.jours < 45 ? "" : "pos")}">${a.jours === 0 && a.solde < (+S.matelas || 0) ? "—" : nJours(a.jours)}</div>
+      <div class="s">${a.jours === 0 && a.solde < (+S.matelas || 0)
+        ? "Tu es déjà sous ton matelas (" + fmt(a.solde) + " contre " + fmt0(+S.matelas || 0) + "). À ton rythme de "
+          + fmt0(a.parJour) + " par jour, il te faut " + fmt0((+S.matelas || 0) - a.solde) + " pour repasser au-dessus."
+        : "si tout s&#39;arrêtait aujourd&#39;hui — plus aucune rentrée d&#39;argent — tu tiendrais " + nJours(a.jours)
+          + " avant de toucher ton matelas, à " + fmt0(a.parJour) + " par jour."}</div></div>` : ""; })()}
   </div>
+  ${htmlProvisions()}
+  ${htmlHisto()}
   <div class="sec"><h2>Où part l&#39;argent</h2>
     ${b.postes.filter(p => p.mois < 0).map(p => {
       const c = cat(p.cat);
@@ -467,6 +483,7 @@ function vueBilan() {
     <div class="btns" style="margin-bottom:8px">
       <button class="btn" data-a="export">⬇︎ Exporter</button>
       <button class="btn" data-a="import">⬆︎ Importer</button></div>
+    <button class="btn" data-a="aide" style="margin-bottom:8px">❓ Comment l&#39;app calcule</button>
     <button class="btn dan" data-a="raz">Tout effacer</button>
     <div class="mini" style="margin-top:12px">Tes données ne quittent jamais ton téléphone : tout est stocké en local
       (clé <code>echeancier_v1</code>), rien n&#39;est envoyé nulle part. Sauvegarde aussi via
@@ -604,7 +621,7 @@ function sheetJour(d) {
     ${occ.length ? '<h2 style="margin-bottom:8px">Prévu</h2>' + occ.map(o => ligneEvt({ nom: o.f.nom, cat: o.f.cat, montant: o.montant, type: "prevu", f: o.f, wk: o.brut !== o.date, pointe: o.pointe }, d)).join("") : ""}
     ${rs.length ? '<h2 style="margin:14px 0 8px">Noté</h2>' + rs.map(r => ligneEvt({ nom: r.nom || cat(r.cat).n, cat: r.cat, montant: r.montant, type: "reel", id: r.id }, d)).join("") : ""}
     ${!occ.length && !rs.length ? '<div class="empty">Rien ce jour-là.</div>' : `<div class="card kpi" style="margin-top:12px"><div class="k">Net du jour</div><div class="v num ${cls(net)}">${fmt(net, true)}</div></div>`}
-    <button class="btn pri" style="margin-top:14px" data-a="new-reel" data-d="${d}">＋ Noter une dépense ce jour-là</button>
+    <button class="btn pri" style="margin-top:14px" data-a="eclair" data-d="${d}">＋ Noter une dépense ce jour-là</button>
     <button class="btn sm" style="margin-top:8px;border:none;color:var(--muted)" data-a="close">Fermer</button>`);
 }
 
@@ -819,6 +836,42 @@ document.addEventListener("click", ev => {
     "new-reel": () => { editReel(null); if (el.dataset.d) { ER.date = el.dataset.d; dessineReel(); } },
     "new-flux": () => editFlux(null),
     modeles: sheetModeles,
+    eclair: () => eclair(el.dataset.d || today()),
+    "ec-t": () => ecTape(el.dataset.t),
+    "ec-del": () => { const e = document.getElementById("ec-nom"); if (e) EC.nom = e.value; EC.v = EC.v.slice(0, -1); dessineEclair(); },
+    "ec-sens": () => { const e = document.getElementById("ec-nom"); if (e) EC.nom = e.value; EC.sens = +el.dataset.v; dessineEclair(); },
+    "ec-date": () => { const e = document.getElementById("ec-nom"); if (e) EC.nom = e.value; EC.date = el.dataset.d; dessineEclair(); },
+    "ec-cal": () => { const d = prompt("Date (AAAA-MM-JJ)", EC.date); if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) { EC.date = d; dessineEclair(); } },
+    "ec-ok": () => ecValide(el.dataset.k),
+    "ec-plus": () => { EC.toutes = true; openSheet(document.getElementById("sbody").innerHTML.replace(
+        /<div class="cgrid">[\s\S]*?<\/div>\s*<div class="btns"/,
+        '<div class="cgrid">' + Object.keys(CATS).map(k => `<button data-a="ec-ok" data-k="${k}"><span class="e">${CATS[k].e}</span>${CATS[k].n}</button>`).join("") + '</div><div class="btns"')); },
+    "ec-form": () => { const m = parseFloat((EC.v || "0").replace(",", ".")) || 0; editReel(null); ER.montant = Math.abs(m) * EC.sens; ER.sens = EC.sens; ER.date = EC.date; ER.nom = EC.nom; dessineReel(); },
+    depart: sheetDepart,
+    "dep-save": departSave,
+    simu: () => sheetSimu(),
+    "si-go": () => { litSimu(); dessineSimu(); },
+    "si-mode": () => { litSimu(); SIM.mode = el.dataset.v; dessineSimu(); },
+    "si-add": () => {
+      litSimu();
+      const m = Math.abs(parseFloat(String(SIM.v).replace(",", ".")) || 0);
+      if (!m) return toast("Il manque le montant");
+      S.flux.push({ id: uid(), nom: SIM.nom.trim() || "Dépense prévue", montant: -m, cat: "divers", actif: true,
+        wk: SIM.mode === "once" ? "aucun" : "apres", enveloppe: false,
+        freq: SIM.mode === "once" ? "ponctuel" : "mensuel", date: SIM.date, debut: SIM.date, fin: null,
+        jour: +SIM.date.slice(8, 10), mois: +SIM.date.slice(5, 7) });
+      save(); closeSheet(); recalc(); render(); toast("Ajouté à ton échéancier ✓");
+    },
+    objectif: sheetObjectif,
+    aide: sheetAide,
+    "o-save": () => {
+      const g = k => (document.getElementById(k) || {}).value;
+      const m = parseFloat(String(g("o-m") || "").replace(",", ".")) || 0;
+      if (!m) return toast("Il manque le montant");
+      S.objectif = { nom: (g("o-nom") || "").trim(), montant: m, date: g("o-d") || addJ(today(), 180) };
+      save(); closeSheet(); recalc(); render(); toast("Objectif enregistré ✓");
+    },
+    "o-del": () => { S.objectif = null; save(); closeSheet(); recalc(); render(); toast("Objectif supprimé"); },
     detect: sheetDetect,
     "import-releve": sheetImport,
     "rel-parse": analyseReleve,
@@ -881,7 +934,7 @@ document.querySelectorAll("nav button").forEach(b => b.addEventListener("click",
   render(); window.scrollTo(0, 0);
 }));
 document.getElementById("btn-ancre").addEventListener("click", sheetAncre);
-document.getElementById("fab").addEventListener("click", () => VUE === "reel" ? editReel(null) : editFlux(null));
+document.getElementById("fab").addEventListener("click", () => VUE === "reel" ? eclair(today()) : editFlux(null));
 
 /* ---------- rendu ---------- */
 function render() {
