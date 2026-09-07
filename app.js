@@ -1,6 +1,8 @@
 /* L'ÉCHÉANCIER — interface */
 
 const CLE = "echeancier_v1";
+const VERSION = "4.0";
+const VERSION_DATE = "7 septembre 2026";
 const vide = () => ({
   v: 1,
   ancre: { date: today(), solde: 0 },
@@ -10,6 +12,7 @@ const vide = () => ({
   reglages: { horizon: 90, wkDefaut: "apres" },
   objectif: null,
   livrets: [],
+  scenarios: [],
   vu: null
 });
 let S = vide();
@@ -283,7 +286,9 @@ function vueCap() {
   </div>`;
 }
 
-function courbe(lignes) {
+function courbe(lignes0) {
+  const ech = echantillonne(lignes0, 170);
+  const lignes = ech.pts;
   const W = 320, Ht = 150, pad = 4;
   const vals = lignes.map(l => l.solde);
   const seuil = +S.matelas || 0;
@@ -320,7 +325,9 @@ function courbe(lignes) {
     ${mrq.join("")}
   </svg>
   <div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--dim);padding:2px 2px 6px">
-    <span>${jourCourt(lignes[0].date)}</span><span class="num">bas : ${fmt0(bas.solde)}</span><span>${jourCourt(lignes[lignes.length - 1].date)}</span></div></div>`;
+    <span>${jourCourt(lignes[0].date)}</span>
+    <span class="num">bas : ${fmt0(bas.solde)}${ech.pas > 1 ? " · creux par " + (ech.pas === 7 ? "semaine" : ech.pas + " j") : ""}</span>
+    <span>${jourCourt(lignes[lignes.length - 1].date)}</span></div></div>`;
 }
 
 /* ---------- vue FLUX ---------- */
@@ -342,7 +349,8 @@ function vueFlux() {
       const mm = f.enveloppe ? f.montant : parMois(f);
       return `<div class="row tap${f.actif ? "" : " off"}" data-a="edit-flux" data-id="${f.id}">
         <div class="em">${c.e}</div>
-        <div class="in"><div class="t">${esc(f.nom)}</div><div class="s">${esc(descFlux(f))}</div></div>
+        <div class="in"><div class="t">${esc(f.nom)}</div><div class="s">${esc(descFlux(f))}</div>
+          ${(() => { const e = echeancesRestantes(f); return e && e.n ? `<div class="s" style="color:var(--warn)">reste ${e.n} échéance${e.n > 1 ? "s" : ""} · ${fmt0(e.total)} jusqu&#39;au ${jourCourt(e.derniere)}</div>` : ""; })()}</div>
         <div class="m ${cls(f.montant)} num">${fmt(f.montant, true)}
           ${f.freq !== "mensuel" && f.freq !== "ponctuel" && !f.enveloppe ? `<small>${fmt0(mm)}/mois</small>` : ""}</div></div>`;
     }).join("")}</div>`;
@@ -486,8 +494,12 @@ function vueBilan() {
       <button class="btn" data-a="export">⬇︎ Exporter</button>
       <button class="btn" data-a="import">⬆︎ Importer</button></div>
     <button class="btn" data-a="aide" style="margin-bottom:8px">❓ Comment l&#39;app calcule</button>
+    <button class="btn" data-a="maj" style="margin-bottom:8px">🔄 Forcer la mise à jour de l&#39;app</button>
     <button class="btn dan" data-a="raz">Tout effacer</button>
-    <div class="mini" style="margin-top:12px">Tes données ne quittent jamais ton téléphone : tout est stocké en local
+    <div class="mini" style="margin-top:12px">Version <b>${VERSION}</b> — ${VERSION_DATE}.
+      Si l&#39;app te paraît figée après une mise à jour, appuie sur « Forcer la mise à jour » : ça vide le cache
+      hors-ligne et recharge la dernière version. Tes données ne sont pas touchées.</div>
+    <div class="mini" style="margin-top:8px">Tes données ne quittent jamais ton téléphone : tout est stocké en local
       (clé <code>echeancier_v1</code>), rien n&#39;est envoyé nulle part. Sauvegarde aussi via
       <a href="https://niclaeysthomas-ctrl.github.io/pointage/coffre.html" style="color:var(--blue)">LE COFFRE</a>.</div>
   </div>`;
@@ -869,6 +881,30 @@ document.addEventListener("click", ev => {
       save(); closeSheet(); recalc(); render(); toast("Ajouté à ton échéancier ✓");
     },
     objectif: sheetObjectif,
+    hplan: () => { S.reglages.horizonPlan = +el.dataset.n; save(); render(); },
+    "plan-new": () => editPlan(null),
+    "plan-edit": () => editPlan(el.dataset.id),
+    "plan-tog": () => {
+      ev.stopPropagation();
+      const sc = (S.scenarios || []).find(x => x.id === el.dataset.id);
+      if (sc) { sc.actif = !sc.actif; save(); recalc(); render(); toast(sc.actif ? "« " + sc.nom + " » allumé" : "« " + sc.nom + " » éteint"); }
+    },
+    "plan-mod": () => openSheet('<h3>Modèles de plans</h3><div class="sub">Choisis, puis ajuste les montants.</div>'
+      + modelesPlans() + '<button class="btn sm" style="margin-top:8px;border:none;color:var(--muted)" data-a="close">Fermer</button>'),
+    "plan-mod-add": () => ajouteModelePlan(+el.dataset.i),
+    "pl-emo": () => { const e = document.getElementById("pl-nom"); if (e) PL.nom = e.value; PL.emoji = el.dataset.e; dessinePlan(); },
+    "pl-ligne": () => editLigne(el.dataset.l || null),
+    "pl-save": sauvePlan,
+    "pl-retour": () => dessinePlan(),
+    "pl-del": () => {
+      S.scenarios = (S.scenarios || []).filter(x => x.id !== PL.id);
+      save(); closeSheet(); recalc(); render(); toast("Plan supprimé");
+    },
+    "pll-sens": () => { litLigne(); PLL.sens = +el.dataset.v; PLL.montant = Math.abs(PLL.montant) * PLL.sens; dessineLigne(); },
+    "pll-freq": () => { litLigne(); PLL.freq = el.dataset.v; dessineLigne(); },
+    "pll-cat": () => { litLigne(); PLL.cat = el.dataset.k; dessineLigne(); },
+    "pll-save": sauveLigne,
+    "pll-del": () => { PL.lignes = (PL.lignes || []).filter(x => x.id !== PLL.id); save(); recalc(); render(); dessinePlan(); toast("Ligne supprimée"); },
     livrets: sheetLivrets,
     "lv-save": livretsSave,
     aide: sheetAide,
@@ -917,6 +953,18 @@ document.addEventListener("click", ev => {
       S.matelas = parseFloat(String((document.getElementById("m-val") || {}).value || "0").replace(",", ".")) || 0;
       save(); closeSheet(); recalc(); render(); toast("Matelas enregistré");
     },
+    maj: async () => {
+      toast("Mise à jour…");
+      try {
+        if ("serviceWorker" in navigator) {
+          const rs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(rs.map(r => r.unregister()));
+        }
+        if (window.caches) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); }
+      } catch (e) {}
+      sessionStorage.removeItem("ech_maj");
+      location.replace(location.pathname + "?maj=" + Date.now());
+    },
     export: exporte,
     import: sheetImportJSON,
     "j-save": () => {
@@ -942,18 +990,19 @@ document.querySelectorAll("nav button").forEach(b => b.addEventListener("click",
   render(); window.scrollTo(0, 0);
 }));
 document.getElementById("btn-ancre").addEventListener("click", sheetAncre);
-document.getElementById("fab").addEventListener("click", () => VUE === "reel" ? eclair(today()) : editFlux(null));
+document.getElementById("fab").addEventListener("click", () =>
+  VUE === "reel" ? eclair(today()) : (VUE === "plans" ? editPlan(null) : editFlux(null)));
 
 /* ---------- rendu ---------- */
 function render() {
   renderHeader();
-  const vues = { mois: vueMois, cap: vueCap, flux: vueFlux, reel: vueReel, bilan: vueBilan };
+  const vues = { mois: vueMois, cap: vueCap, plans: vuePlans, flux: vueFlux, reel: vueReel, bilan: vueBilan };
   for (const k in vues) {
     const el = document.getElementById("v-" + k);
     el.classList.toggle("hidden", k !== VUE);
     if (k === VUE) el.innerHTML = vues[k]();
   }
-  document.getElementById("fab").classList.toggle("hidden", !(VUE === "flux" || VUE === "reel"));
+  document.getElementById("fab").classList.toggle("hidden", !(VUE === "flux" || VUE === "reel" || (VUE === "plans" && (S.scenarios || []).length)));
 }
 
 charge();

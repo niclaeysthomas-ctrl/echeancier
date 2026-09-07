@@ -425,3 +425,85 @@ function tenue(S) {
     parAn: b.netMois * 12
   };
 }
+
+/* ---------- scénarios (« et si je faisais ça ? ») ----------
+   Un scénario est un paquet d'hypothèses : des revenus ou des dépenses en plus,
+   ponctuels ou récurrents, qu'on peut allumer et éteindre pour comparer. */
+function ligneVersFlux(l, prefixe) {
+  return {
+    id: (prefixe || "") + l.id, nom: l.nom, montant: +l.montant || 0, cat: l.cat || "divers",
+    actif: true, wk: "aucun", enveloppe: false,
+    freq: l.freq === "ponctuel" ? "ponctuel" : "mensuel",
+    date: l.date, debut: l.date, fin: l.fin || null,
+    jour: +(l.date || today()).slice(8, 10), mois: +(l.date || today()).slice(5, 7)
+  };
+}
+function fluxScenarios(S, ids) {
+  const out = [];
+  for (const sc of (S.scenarios || [])) {
+    if (ids ? !ids.includes(sc.id) : !sc.actif) continue;
+    for (const l of (sc.lignes || [])) out.push(ligneVersFlux(l, sc.id + "_"));
+  }
+  return out;
+}
+function projectionScen(S, jours, ids) {
+  const add = fluxScenarios(S, ids);
+  if (!add.length) return projection(S, jours);
+  return projection(Object.assign({}, S, { flux: S.flux.concat(add) }), jours);
+}
+/* Ce qu'un jeu de scénarios change, chiffré. */
+function impact(S, jours, ids) {
+  const t = today();
+  const A = projection(S, jours).filter(l => l.date >= t);
+  const B = projectionScen(S, jours, ids).filter(l => l.date >= t);
+  const fin = d => { const l = A.find(x => x.date === d) || A[A.length - 1]; return l ? l.solde : 0; };
+  const finB = d => { const l = B.find(x => x.date === d) || B[B.length - 1]; return l ? l.solde : 0; };
+  const seuil = +S.matelas || 0;
+  const j = n => addJ(t, n);
+  const minA = A.reduce((m, l) => Math.min(m, l.solde), Infinity);
+  const minB = B.reduce((m, l) => Math.min(m, l.solde), Infinity);
+  const decouvA = A.find(l => l.solde < seuil), decouvB = B.find(l => l.solde < seuil);
+  const parMois = (B.length && A.length) ? (B[B.length - 1].solde - A[A.length - 1].solde) / (jours / 30.44) : 0;
+  return {
+    A, B, jours,
+    sans: { m3: fin(j(90)), m6: fin(j(182)), an: fin(j(365)), min: minA, decouv: decouvA ? decouvA.date : null },
+    avec: { m3: finB(j(90)), m6: finB(j(182)), an: finB(j(365)), min: minB, decouv: decouvB ? decouvB.date : null },
+    diff: { m3: finB(j(90)) - fin(j(90)), m6: finB(j(182)) - fin(j(182)), an: finB(j(365)) - fin(j(365)) },
+    parMois
+  };
+}
+/* Résumé lisible d'un scénario : « +200 €/mois à partir d'octobre ». */
+function resumeScenario(sc) {
+  const l = sc.lignes || [];
+  if (!l.length) return "Aucune ligne — à remplir";
+  const rec = l.filter(x => x.freq !== "ponctuel"), pon = l.filter(x => x.freq === "ponctuel");
+  const mm = rec.reduce((s, x) => s + (+x.montant || 0), 0);
+  const pp = pon.reduce((s, x) => s + (+x.montant || 0), 0);
+  const eur = v => (v > 0 ? "+" : "−") + Math.abs(Math.round(v)).toLocaleString("fr-FR") + " €";
+  const bouts = [];
+  if (mm) bouts.push(eur(mm) + "/mois");
+  if (pp) bouts.push(eur(pp) + " en une fois");
+  return bouts.join(" · ") + (l.length > 1 ? " · " + l.length + " lignes" : "");
+}
+/* Combien d'échéances restent sur un flux qui a une fin (prêt, abonnement engagé). */
+function echeancesRestantes(f) {
+  if (!f.fin || f.freq === "ponctuel") return null;
+  const o = occurrences(f, today(), f.fin);
+  return { n: o.length, total: o.reduce((s, x) => s + x.montant, 0), derniere: o.length ? o[o.length - 1].date : null };
+}
+
+/* Sur une longue période, un point par jour donne un peigne illisible.
+   On regroupe alors par paquets en gardant le PIRE solde de chaque paquet :
+   c'est le creux qui compte, pas le pic. */
+function echantillonne(a, max, pasImpose) {
+  const pas = pasImpose || (a.length <= max ? 1 : Math.ceil(a.length / max));
+  if (pas <= 1) return { pts: a.slice(), pas: 1 };
+  const out = [];
+  for (let i = 0; i < a.length; i += pas) {
+    const bloc = a.slice(i, i + pas);
+    out.push(bloc.reduce((m, x) => x.solde < m.solde ? x : m, bloc[0]));
+  }
+  const der = a[a.length - 1];
+  if (out[out.length - 1] !== der) out.push(der);
+  return { pts: out, pas };
+}

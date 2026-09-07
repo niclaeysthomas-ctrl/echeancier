@@ -198,8 +198,11 @@ function dessineSimu() {
     <button class="btn" style="margin-top:10px" data-a="si-add">Ajouter pour de vrai à mon échéancier</button>` : ""}
   <button class="btn sm" style="margin-top:8px;border:none;color:var(--muted)" data-a="close">Fermer</button>`);
 }
-function courbe2(avant, apres) {
+function courbe2(avant0, apres0) {
   const W = 320, H = 110, p = 4;
+  const pas = Math.max(1, Math.ceil(Math.max(avant0.length, apres0.length) / 160));
+  const avant = echantillonne(avant0, 160, pas).pts;
+  const apres = echantillonne(apres0, 160, pas).pts;
   const all = [...avant.map(l => l.solde), ...apres.map(l => l.solde), +S.matelas || 0, 0];
   let mn = Math.min(...all), mx = Math.max(...all);
   if (mx - mn < 10) { mx += 5; mn -= 5; }
@@ -209,14 +212,16 @@ function courbe2(avant, apres) {
   const Y = v => H - p - (v - mn) * (H - 2 * p) / (mx - mn);
   const d = a => "M" + a.map((l, i) => X(i) + "," + Y(l.solde).toFixed(1)).join("L");
   const ys = Y(+S.matelas || 0);
+  const coulA = "#5b8def";
+  const coulB = apres.reduce((a, l) => Math.min(a, l.solde), Infinity) < (+S.matelas || 0) ? "#ff5f5f" : "#3ddc97";
   return `<div class="chart" style="margin-top:9px"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
     <line x1="0" y1="${ys.toFixed(1)}" x2="${W}" y2="${ys.toFixed(1)}" stroke="#f5c451" stroke-width="1" stroke-dasharray="2 4" opacity=".55"/>
-    <path d="${d(avant)}" fill="none" stroke="#5b8def" stroke-width="1.6" opacity=".55" vector-effect="non-scaling-stroke"/>
-    <path d="${d(apres)}" fill="none" stroke="${apres.reduce((a, l) => Math.min(a, l.solde), Infinity) < (+S.matelas || 0) ? "#ff5f5f" : "#3ddc97"}"
-      stroke-width="2" vector-effect="non-scaling-stroke"/></svg>
-    <div style="display:flex;gap:12px;font-size:10.5px;color:var(--dim);padding:2px 2px 6px">
-      <span><b style="color:#5b8def">—</b> sans</span><span><b style="color:#3ddc97">—</b> avec</span>
-      <span style="margin-left:auto">matelas ${fmt0(+S.matelas || 0)}</span></div></div>`;
+    <path d="${d(avant)}" fill="none" stroke="${coulA}" stroke-width="1.6" opacity=".6" vector-effect="non-scaling-stroke"/>
+    <path d="${d(apres)}" fill="none" stroke="${coulB}" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>
+    <div style="display:flex;gap:12px;font-size:10.5px;color:var(--dim);padding:2px 2px 6px;flex-wrap:wrap">
+      <span><b style="color:${coulA}">—</b> sans</span><span><b style="color:${coulB}">—</b> avec</span>
+      <span>matelas ${fmt0(+S.matelas || 0)}</span>
+      ${pas > 1 ? `<span style="margin-left:auto">creux par ${pas === 7 ? "semaine" : pas + " jours"}</span>` : ""}</div></div>`;
 }
 
 /* ============ 4. OBJECTIF D'ÉPARGNE ============ */
