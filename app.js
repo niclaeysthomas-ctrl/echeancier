@@ -1,8 +1,8 @@
 /* L'ÉCHÉANCIER — interface */
 
 const CLE = "echeancier_v1";
-const VERSION = "4.0";
-const VERSION_DATE = "7 septembre 2026";
+const VERSION = "5.0";
+const VERSION_DATE = "13 septembre 2026";
 const vide = () => ({
   v: 1,
   ancre: { date: today(), solde: 0 },
@@ -13,6 +13,7 @@ const vide = () => ({
   objectif: null,
   livrets: [],
   scenarios: [],
+  manuel: { done: {}, lu: {}, carnet: {} },
   vu: null
 });
 let S = vide();
@@ -981,6 +982,7 @@ document.addEventListener("click", ev => {
     }
   };
   if (A[a]) { ev.preventDefault(); A[a](); }
+  else if (typeof manAction === "function" && manAction(a, el)) ev.preventDefault();
 });
 document.getElementById("sbg").addEventListener("click", closeSheet);
 document.querySelectorAll("nav button").forEach(b => b.addEventListener("click", () => {
@@ -996,7 +998,7 @@ document.getElementById("fab").addEventListener("click", () =>
 /* ---------- rendu ---------- */
 function render() {
   renderHeader();
-  const vues = { mois: vueMois, cap: vueCap, plans: vuePlans, flux: vueFlux, reel: vueReel, bilan: vueBilan };
+  const vues = { mois: vueMois, cap: vueCap, plans: vuePlans, flux: vueFlux, reel: vueReel, bilan: vueBilan, manuel: vueManuel };
   for (const k in vues) {
     const el = document.getElementById("v-" + k);
     el.classList.toggle("hidden", k !== VUE);

@@ -124,7 +124,7 @@ header{padding:26px 0 4px}
 nav{position:fixed;left:0;right:0;bottom:0;background:#0a0c10f2;backdrop-filter:blur(12px);
   border-top:1px solid var(--line);display:flex;padding:7px 4px calc(7px + env(safe-area-inset-bottom));z-index:50}
 nav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 0;
-  font-size:8.5px;font-weight:700;color:var(--dim);letter-spacing:0;min-width:0}
+  font-size:8px;font-weight:700;color:var(--dim);letter-spacing:-.01em;min-width:0;white-space:nowrap}
 nav button .i{font-size:17px;line-height:1}
 nav button.on{color:var(--txt)}
 
@@ -205,6 +205,72 @@ input.dl-m{width:86px;background:var(--bg);border:1px solid var(--line2);border-
 input.dl-j{width:50px;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:9px 4px;
   color:var(--muted);text-align:center;outline:none;font-size:13px}
 span.dl-j{width:50px;text-align:center;font-size:10.5px}
+/* LE MANUEL */
+.man-t{font-size:22px;font-weight:800;letter-spacing:-.015em;line-height:1.2}
+.man-s{font-size:13px;color:var(--muted);margin-top:6px;line-height:1.5}
+.man-q{width:100%;background:var(--card);border:1px solid var(--line2);border-radius:12px;padding:12px 13px;
+  color:var(--txt);outline:none;margin-top:15px;-webkit-appearance:none}
+.man-q:focus{border-color:var(--blue)}
+.man-res-n{font-size:10.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:16px 0 8px}
+.man-urg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.man-u{background:#ff5f5f12;border:1px solid #ff5f5f38;border-radius:12px;padding:12px 11px;font-size:12.5px;
+  font-weight:700;text-align:left;line-height:1.35;color:var(--txt)}
+.man-u:active{background:#ff5f5f22}
+.man-jour{margin-top:10px}
+.man-jour-c{font-size:10px;font-weight:800;letter-spacing:.11em;text-transform:uppercase;color:var(--dim)}
+.man-jour-t{font-size:16.5px;font-weight:700;margin-top:5px;letter-spacing:-.015em;line-height:1.3}
+.man-jour-r{font-size:12.5px;color:var(--muted);margin-top:5px;line-height:1.45}
+.man-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}
+.man-c{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:13px 11px;text-align:left}
+.man-c:active{background:var(--card2)}
+.man-c .e{font-size:21px;line-height:1}
+.man-c .t{font-size:14px;font-weight:700;margin-top:7px;letter-spacing:-.01em}
+.man-c .s{font-size:11px;color:var(--dim);margin-top:2px}
+.man-pg{display:flex;align-items:center;gap:14px}
+.man-pg-n{font-size:30px;font-weight:600;letter-spacing:-.02em;line-height:1}
+.man-pg-n span{font-size:15px;color:var(--dim)}
+.man-pg-x{flex:1;font-size:12px;color:var(--muted)}
+.man-back{font-size:12.5px;font-weight:700;color:var(--muted);padding:4px 2px}
+.man-f-t{font-size:25px;font-weight:700;letter-spacing:-.025em;margin:12px 0 0;line-height:1.18}
+.man-f-r{font-size:14px;line-height:1.5;margin-top:11px;padding:11px 13px;background:var(--card2);
+  border:1px solid var(--line2);border-radius:12px}
+.man-body{font-size:14.5px;line-height:1.62}
+.mp{margin:0 0 13px}
+.mh{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:24px 0 10px}
+.ml{margin:0 0 13px;padding-left:19px}
+.ml li{margin-bottom:8px}
+.mn{margin:0 0 13px;padding:0;list-style:none;counter-reset:mn}
+.mn li{counter-increment:mn;display:flex;gap:11px;margin-bottom:11px;align-items:flex-start}
+.mn li::before{content:counter(mn);flex:0 0 22px;height:22px;border-radius:50%;background:var(--card2);
+  border:1px solid var(--line2);color:var(--muted);font-size:11.5px;font-weight:800;display:grid;
+  place-items:center;margin-top:2px}
+.menc{border-radius:12px;padding:12px 13px;font-size:13.5px;line-height:1.55;margin:0 0 13px}
+.menc b{display:block;font-size:12.5px;margin-bottom:4px}
+.menc-e{background:#ff5f5f10;border:1px solid #ff5f5f33}
+.menc-e b{color:var(--bad)}
+.menc-g{background:#3ddc970f;border:1px solid #3ddc9730}
+.menc-g b{color:var(--good)}
+.menc-b{background:#5b8def10;border:1px solid #5b8def33}
+.menc-b b{color:var(--blue)}
+.mchif{display:grid;gap:8px;margin:0 0 14px}
+.mchif-c{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 12px}
+.mchif-c .v{font-size:19px;font-weight:700;letter-spacing:-.02em}
+.mchif-c .q{font-size:12px;font-weight:700;margin-top:1px}
+.mchif-c .n{font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.45}
+.mnum{margin:0 0 14px}
+.mnum-l{display:flex;gap:11px;align-items:baseline;padding:9px 1px;border-bottom:1px solid var(--line)}
+.mnum-l:last-child{border-bottom:none}
+.mnum-l .k{font-size:13.5px;font-weight:800;flex:0 0 auto;max-width:48%;word-break:break-word}
+.mnum-l .d{font-size:12px;color:var(--muted);line-height:1.42}
+.man-todo{display:flex;gap:11px;align-items:flex-start;width:100%;text-align:left;background:var(--card);
+  border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin-bottom:7px;font-size:13.5px;line-height:1.45}
+.man-todo .b{flex:0 0 21px;height:21px;border-radius:6px;border:1px solid var(--line2);display:grid;
+  place-items:center;font-size:12px;margin-top:1px}
+.man-todo.on .b{background:var(--good);border-color:var(--good);color:#062b1a;font-weight:800}
+.man-todo.on .l{color:var(--muted);text-decoration:line-through}
+.man-todo i{display:block;font-style:normal;font-size:11px;color:var(--blue);margin-top:4px;font-weight:700;text-decoration:none}
+.man-voir{display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);
+  border-radius:12px;padding:11px 12px;margin-bottom:7px;font-size:13.5px;font-weight:600}
 </style>
 </head>
 <body>
@@ -226,6 +292,7 @@ span.dl-j{width:50px;text-align:center;font-size:10.5px}
     <section id="v-flux" class="hidden"></section>
     <section id="v-reel" class="hidden"></section>
     <section id="v-bilan" class="hidden"></section>
+    <section id="v-manuel" class="hidden"></section>
   </main>
 </div>
 
@@ -238,6 +305,7 @@ span.dl-j{width:50px;text-align:center;font-size:10.5px}
   <button data-v="flux"><span class="i">🔁</span>Flux</button>
   <button data-v="reel"><span class="i">💸</span>Dépenses</button>
   <button data-v="bilan"><span class="i">📊</span>Bilan</button>
+  <button data-v="manuel"><span class="i">🧭</span>Manuel</button>
 </nav>
 
 <div class="sheet-bg" id="sbg"></div>
@@ -247,6 +315,7 @@ span.dl-j{width:50px;text-align:center;font-size:10.5px}
 <script src="moteur.js"></script>
 <script src="outils.js"></script>
 <script src="plans.js"></script>
+<script src="manuel.js"></script>
 <script src="app.js"></script>
 <script>
 if ("serviceWorker" in navigator) {
