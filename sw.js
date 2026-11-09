@@ -1,5 +1,5 @@
 // L'ÉCHÉANCIER — service worker : network-first, repli cache (100 % hors-ligne)
-const CACHE = "echeancier-v5-manuel";
+const CACHE = "echeancier-v6-manuel";
 const ASSETS = ["./", "./index.html", "./moteur.js", "./outils.js", "./plans.js", "./manuel.js", "./app.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {
@@ -15,7 +15,7 @@ self.addEventListener("fetch", e => {
   e.respondWith(
     fetch(e.request).then(res => {
       const copy = res.clone();
-      caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+      if (res.ok) caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
       return res;
     }).catch(() => caches.match(e.request, { ignoreSearch: true }).then(h => h || caches.match("./index.html")))
   );
